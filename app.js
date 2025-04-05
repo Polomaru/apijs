@@ -6,8 +6,9 @@ const app = express();
 const port = 7000;
 
 // Middleware
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+
 
 // Conexión a la base de datos
 const db = new sqlite3.Database('./students.sqlite', (err) => {
