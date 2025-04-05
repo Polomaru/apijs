@@ -1,17 +1,19 @@
 const express = require('express');
+const multer = require('multer');
 const sqlite3 = require('sqlite3').verbose();
-const bodyParser = require('body-parser');
 
 const app = express();
 const port = 7000;
 
-// Middleware
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+// Configurar multer para manejar form-data sin archivos
+const upload = multer();
 
+// Middlewares para manejar JSON y form-urlencoded
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Conexión a la base de datos
-const db = new sqlite3.Database('./students.sqlite', (err) => {
+// Conexión a la base de datos SQLite
+const db = new sqlite3.Database('students.sqlite', (err) => {
   if (err) {
     console.error('Error al conectar con la base de datos:', err.message);
   } else {
@@ -25,71 +27,67 @@ app.route('/students')
     db.all('SELECT * FROM students', [], (err, rows) => {
       if (err) {
         res.status(500).json({ error: err.message });
-        return;
+      } else {
+        res.json(rows);
       }
-      const students = rows.map(row => ({
-        id: row.id,
-        firstname: row.firstname,
-        lastname: row.lastname,
-        gender: row.gender,
-        age: row.age
-      }));
-      res.json(students);
     });
   })
-  .post((req, res) => {
+  .post(upload.none(), (req, res) => {
     const { firstname, lastname, gender, age } = req.body;
-    const sql = 'INSERT INTO students (firstname, lastname, gender, age) VALUES (?, ?, ?, ?)';
+
+    if (!firstname || !lastname || !gender) {
+      return res.status(400).json({ error: "Campos obligatorios faltantes" });
+    }
+
+    const sql = `INSERT INTO students (firstname, lastname, gender, age) VALUES (?, ?, ?, ?)`;
     db.run(sql, [firstname, lastname, gender, age], function (err) {
       if (err) {
         res.status(500).json({ error: err.message });
-        return;
+      } else {
+        res.status(201).json({ message: `Student with ID ${this.lastID} created.` });
       }
-      res.send(`Student with id: ${this.lastID} created successfully`);
     });
   });
 
-// Ruta GET, PUT y DELETE para un solo estudiante
+// Ruta GET, PUT y DELETE para un estudiante específico
 app.route('/student/:id')
   .get((req, res) => {
     const id = req.params.id;
     db.get('SELECT * FROM students WHERE id = ?', [id], (err, row) => {
       if (err) {
         res.status(500).json({ error: err.message });
-        return;
+      } else if (!row) {
+        res.status(404).json({ error: 'Estudiante no encontrado' });
+      } else {
+        res.json(row);
       }
-      if (!row) {
-        res.status(404).send('Student not found');
-        return;
-      }
-      res.json(row);
     });
   })
-  .put((req, res) => {
+  .put(upload.none(), (req, res) => {
     const id = req.params.id;
     const { firstname, lastname, gender, age } = req.body;
+
     const sql = `UPDATE students SET firstname = ?, lastname = ?, gender = ?, age = ? WHERE id = ?`;
     db.run(sql, [firstname, lastname, gender, age, id], function (err) {
       if (err) {
         res.status(500).json({ error: err.message });
-        return;
+      } else {
+        res.json({ message: `Estudiante con ID ${id} actualizado.` });
       }
-      res.json({ id, firstname, lastname, gender, age });
     });
   })
   .delete((req, res) => {
     const id = req.params.id;
-    const sql = 'DELETE FROM students WHERE id = ?';
-    db.run(sql, [id], function (err) {
+    db.run('DELETE FROM students WHERE id = ?', [id], function (err) {
       if (err) {
         res.status(500).json({ error: err.message });
-        return;
+      } else {
+        res.json({ message: `Estudiante con ID ${id} eliminado.` });
       }
-      res.send(`The Student with id: ${id} has been deleted.`);
     });
   });
 
-// Iniciar servidor
+// Iniciar el servidor
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server running at http://0.0.0.0:${port}`);
 });
